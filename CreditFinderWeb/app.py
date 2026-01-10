@@ -53,13 +53,13 @@ st.markdown("""
 
 # Helper Functions (MUST BE DEFINED BEFORE USE)
 def find_credit_classes(classes_df, students_df, search_term, missed_class_id, process_all):
-    """Main logic for finding credit classes"""
+    """Main logic for finding credit classes - MATCHES DESKTOP VERSION"""
     results = []
     message_student_name = None
     message_subject = None
     message_credit_classes = []
     
-    # Detect columns
+    # Detect columns (same as before)
     student_id_col = next((col for col in students_df.columns if 'student' in col.lower() and 'id' in col.lower()), None)
     student_name_col = next((col for col in students_df.columns if 'student' in col.lower() and 'name' in col.lower()), None)
     class_id_col = next((col for col in students_df.columns if 'class' in col.lower() and 'id' in col.lower()), None)
@@ -76,6 +76,17 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
     classtype_col = next((col for col in classes_df.columns if 'type' in col.lower()), None)
     status_col = next((col for col in classes_df.columns if 'status' in col.lower()), None)
     duration_col = next((col for col in classes_df.columns if 'duration' in col.lower()), None)
+    
+    # Get missed class info if provided
+    missed_class_info = None
+    if missed_class_id:
+        try:
+            missed_class_row = classes_df[classes_df[class_id_col_classes].astype(str) == str(missed_class_id)]
+            if not missed_class_row.empty:
+                missed_class_info = missed_class_row.iloc[0]
+                message_subject = missed_class_info.get(subject_col)
+        except:
+            pass
     
     # Filter students
     if process_all:
@@ -147,6 +158,8 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
             if len(streams) >= 2:
                 subjects_with_both_streams.add(subject)
         
+        all_student_subjects = set(subject_stream_ability_map.keys())
+        
         # Get available classes
         if classtype_col and status_col:
             available_classes = classes_df[
@@ -159,91 +172,202 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
         else:
             available_classes = classes_df[classes_df[year_col_classes] == student_year].copy()
         
-        # Find credit classes
-        credit_classes = []
+        # Find credit classes with PRIORITY SYSTEM
+        credit_classes_final = []
         
-        for idx in available_classes.index:
-            available_class = available_classes.loc[idx]
-            class_id = available_class[class_id_col_classes]
+        if missed_class_info is not None:
+            # MISSED CLASS REPLACEMENT - 3 PRIORITY LEVELS
+            missed_subject = missed_class_info.get(subject_col)
+            missed_stream = missed_class_info.get(stream_col)
             
-            if pd.isna(class_id) or class_id in enrolled_classes:
-                continue
+            priority_1 = []  # Same subject, different stream
+            priority_2 = []  # Different subject (not in both streams), same ability
+            priority_3 = []  # Different ability levels
             
-            # Check time conflict
-            if time_col_classes:
-                class_time = available_class[time_col_classes]
-                if pd.notna(class_time) and class_time in enrolled_times:
+            # PRIORITY 1: Same subject, different stream (if student doesn't have both)
+            if missed_subject not in subjects_with_both_streams:
+                for idx in available_classes.index:
+                    available_class = available_classes.loc[idx]
+                    class_id = available_class[class_id_col_classes]
+                    
+                    if pd.isna(class_id) or class_id in enrolled_classes:
+                        continue
+                    if str(class_id) == str(missed_class_id):
+                        continue
+                    
+                    # Time conflict check
+                    if time_col_classes:
+                        class_time = available_class[time_col_classes]
+                        if pd.notna(class_time) and class_time in enrolled_times:
+                            continue
+                    
+                    subject = available_class[subject_col]
+                    stream = available_class[stream_col]
+                    ability = available_class[ability_col]
+                    
+                    if pd.isna(subject) or pd.isna(stream) or pd.isna(ability):
+                        continue
+                    
+                    if subject == missed_subject and stream != missed_stream:
+                        priority_1.append(available_class)
+            
+            # PRIORITY 2: Different subjects (same ability)
+            for idx in available_classes.index:
+                available_class = available_classes.loc[idx]
+                class_id = available_class[class_id_col_classes]
+                
+                if pd.isna(class_id) or class_id in enrolled_classes:
                     continue
+                if str(class_id) == str(missed_class_id):
+                    continue
+                
+                if time_col_classes:
+                    class_time = available_class[time_col_classes]
+                    if pd.notna(class_time) and class_time in enrolled_times:
+                        continue
+                
+                subject = available_class[subject_col]
+                stream = available_class[stream_col]
+                ability = available_class[ability_col]
+                
+                if pd.isna(subject) or pd.isna(stream) or pd.isna(ability):
+                    continue
+                
+                if subject in subjects_with_both_streams or subject == missed_subject:
+                    continue
+                
+                if ability in student_all_abilities:
+                    priority_2.append(available_class)
             
-            subject = available_class[subject_col]
-            stream = available_class[stream_col]
-            ability = available_class[ability_col]
+            # PRIORITY 3: Different abilities
+            if not priority_1 and not priority_2:
+                for idx in available_classes.index:
+                    available_class = available_classes.loc[idx]
+                    class_id = available_class[class_id_col_classes]
+                    
+                    if pd.isna(class_id) or class_id in enrolled_classes:
+                        continue
+                    if str(class_id) == str(missed_class_id):
+                        continue
+                    
+                    if time_col_classes:
+                        class_time = available_class[time_col_classes]
+                        if pd.notna(class_time) and class_time in enrolled_times:
+                            continue
+                    
+                    subject = available_class[subject_col]
+                    stream = available_class[stream_col]
+                    ability = available_class[ability_col]
+                    
+                    if pd.isna(subject) or pd.isna(stream) or pd.isna(ability):
+                        continue
+                    
+                    if subject in subject_stream_ability_map:
+                        if stream in subject_stream_ability_map[subject]:
+                            if ability not in subject_stream_ability_map[subject][stream]:
+                                priority_3.append(available_class)
             
-            if pd.isna(subject) or pd.isna(stream) or pd.isna(ability):
-                continue
-            
-            # Apply logic based on whether student has both streams
-            is_valid = False
-            
-            if subjects_with_both_streams:
-                # Different subject with same ability (priority 1)
-                if subject not in subjects_with_both_streams and ability in student_all_abilities:
-                    is_valid = True
-                # Same subject with different ability (priority 2)
-                elif subject in subjects_with_both_streams:
-                    subject_abilities = set()
-                    for stream_abilities in subject_stream_ability_map[subject].values():
-                        subject_abilities.update(stream_abilities)
-                    if ability not in subject_abilities:
-                        is_valid = True
+            # Use highest priority available
+            if priority_1:
+                credit_classes_final = priority_1
+            elif priority_2:
+                credit_classes_final = priority_2
             else:
-                # Normal logic
-                if subject in subject_stream_ability_map:
-                    student_streams = set(subject_stream_ability_map[subject].keys())
-                    if stream not in student_streams:
-                        is_valid = True
-                    elif stream in subject_stream_ability_map[subject]:
-                        if ability not in subject_stream_ability_map[subject][stream]:
-                            is_valid = True
-                else:
-                    is_valid = True
+                credit_classes_final = priority_3
+                
+        else:
+            # GENERAL CREDIT CLASS LOGIC
+            priority_1 = []
+            priority_2 = []
+            priority_3 = []
             
-            if is_valid:
-                # Format time
-                time_display = "N/A"
-                if time_col_classes and pd.notna(available_class.get(time_col_classes)):
-                    try:
-                        start_time = available_class[time_col_classes]
-                        if isinstance(start_time, str):
-                            start_time = datetime.strptime(start_time, "%H:%M:%S").time()
+            for idx in available_classes.index:
+                available_class = available_classes.loc[idx]
+                class_id = available_class[class_id_col_classes]
+                
+                if pd.isna(class_id) or class_id in enrolled_classes:
+                    continue
+                
+                if time_col_classes:
+                    class_time = available_class[time_col_classes]
+                    if pd.notna(class_time) and class_time in enrolled_times:
+                        continue
+                
+                subject = available_class[subject_col]
+                stream = available_class[stream_col]
+                ability = available_class[ability_col]
+                
+                if pd.isna(subject) or pd.isna(stream) or pd.isna(ability):
+                    continue
+                
+                subject_has_both_streams = subject in subjects_with_both_streams
+                
+                if subject_has_both_streams:
+                    # Priority 2: Different ability for subject with both streams
+                    if stream in subject_stream_ability_map[subject]:
+                        if ability not in subject_stream_ability_map[subject][stream]:
+                            priority_2.append(available_class)
+                else:
+                    # Priority 1: Different stream or new subject
+                    if subject not in all_student_subjects:
+                        if ability in student_all_abilities:
+                            priority_1.append(available_class)
+                        else:
+                            priority_3.append(available_class)
+                    elif subject in subject_stream_ability_map:
+                        student_streams = set(subject_stream_ability_map[subject].keys())
+                        if stream not in student_streams:
+                            priority_1.append(available_class)
+                        elif stream in subject_stream_ability_map[subject]:
+                            if ability not in subject_stream_ability_map[subject][stream]:
+                                priority_1.append(available_class)
+            
+            # Use highest priority
+            if priority_1:
+                credit_classes_final = priority_1
+            elif priority_2:
+                credit_classes_final = priority_2
+            else:
+                credit_classes_final = priority_3
+        
+        # Format results
+        formatted_classes = []
+        for credit in credit_classes_final:
+            # Format time
+            time_display = "N/A"
+            if time_col_classes and pd.notna(credit.get(time_col_classes)):
+                try:
+                    start_time = credit[time_col_classes]
+                    if isinstance(start_time, str):
+                        start_time = datetime.strptime(start_time, "%H:%M:%S").time()
+                    
+                    if hasattr(start_time, 'hour'):
+                        duration_minutes = 60
+                        if duration_col and pd.notna(credit.get(duration_col)):
+                            duration_minutes = int(credit[duration_col])
                         
-                        if hasattr(start_time, 'hour'):
-                            duration_minutes = 60
-                            if duration_col and pd.notna(available_class.get(duration_col)):
-                                duration_minutes = int(available_class[duration_col])
-                            
-                            start_dt = datetime.combine(datetime.today(), start_time)
-                            end_dt = start_dt + timedelta(minutes=duration_minutes)
-                            time_display = f"{start_dt.strftime('%I:%M %p').lstrip('0')} - {end_dt.strftime('%I:%M %p').lstrip('0')}"
-                    except:
-                        time_display = str(available_class[time_col_classes])
-                
-                credit_classes.append({
-                    'class_id': str(available_class[class_id_col_classes]),
-                    'subject': str(available_class[subject_col]),
-                    'stream': str(available_class[stream_col]).upper(),
-                    'ability': str(available_class[ability_col]).title(),
-                    'day': str(available_class[day_col]).title() if day_col and pd.notna(available_class.get(day_col)) else "N/A",
-                    'time': time_display
-                })
-                
-                message_credit_classes.append({
-                    'day': str(available_class[day_col]).title() if day_col and pd.notna(available_class.get(day_col)) else "N/A",
-                    'time': time_display,
-                    'subject': str(available_class[subject_col]),
-                    'stream': str(available_class[stream_col]).upper(),
-                    'ability': str(available_class[ability_col]).title()
-                })
+                        start_dt = datetime.combine(datetime.today(), start_time)
+                        end_dt = start_dt + timedelta(minutes=duration_minutes)
+                        time_display = f"{start_dt.strftime('%I:%M %p').lstrip('0')} - {end_dt.strftime('%I:%M %p').lstrip('0')}"
+                except:
+                    time_display = str(credit[time_col_classes])
+            
+            formatted_classes.append({
+                'class_id': str(credit[class_id_col_classes]),
+                'subject': str(credit[subject_col]),
+                'stream': str(credit[stream_col]).upper(),
+                'ability': str(credit[ability_col]).title(),
+                'day': str(credit[day_col]).title() if day_col and pd.notna(credit.get(day_col)) else "N/A",
+                'time': time_display
+            })
+            
+            message_credit_classes.append({
+                'day': str(credit[day_col]).title() if day_col and pd.notna(credit.get(day_col)) else "N/A",
+                'time': time_display,
+                'subject': str(credit[subject_col]),
+                'stream': str(credit[stream_col]).upper(),
+                'ability': str(credit[ability_col]).title()
+            })
         
         # Add to results
         note = None
@@ -260,7 +384,7 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
         
         results.append({
             'type': 'credit_classes',
-            'classes': credit_classes
+            'classes': formatted_classes
         })
     
     return results, message_student_name, message_subject, message_credit_classes
@@ -499,3 +623,4 @@ st.markdown("""
     <p style="font-size: 0.8rem;">All Rights Reserved</p>
 </div>
 """, unsafe_allow_html=True)
+
