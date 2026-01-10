@@ -40,6 +40,13 @@ st.markdown("""
         margin: 5px 0;
         border-left: 3px solid #00ff9f;
     }
+    .missed-class-info {
+        background-color: rgba(255, 100, 100, 0.1);
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 4px solid #ff6464;
+        margin: 15px 0;
+    }
     .footer {
         text-align: center;
         padding: 20px;
@@ -51,15 +58,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# Helper Functions (MUST BE DEFINED BEFORE USE)
+# Helper Functions
 def find_credit_classes(classes_df, students_df, search_term, missed_class_id, process_all):
     """Main logic for finding credit classes - MATCHES DESKTOP VERSION"""
     results = []
     message_student_name = None
     message_subject = None
     message_credit_classes = []
+    missed_class_display = None
     
-    # Detect columns (same as before)
+    # Detect columns
     student_id_col = next((col for col in students_df.columns if 'student' in col.lower() and 'id' in col.lower()), None)
     student_name_col = next((col for col in students_df.columns if 'student' in col.lower() and 'name' in col.lower()), None)
     class_id_col = next((col for col in students_df.columns if 'class' in col.lower() and 'id' in col.lower()), None)
@@ -76,6 +84,7 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
     classtype_col = next((col for col in classes_df.columns if 'type' in col.lower()), None)
     status_col = next((col for col in classes_df.columns if 'status' in col.lower()), None)
     duration_col = next((col for col in classes_df.columns if 'duration' in col.lower()), None)
+    classname_col = next((col for col in classes_df.columns if 'class' in col.lower() and 'name' in col.lower()), None)
     
     # Get missed class info if provided
     missed_class_info = None
@@ -85,6 +94,15 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
             if not missed_class_row.empty:
                 missed_class_info = missed_class_row.iloc[0]
                 message_subject = missed_class_info.get(subject_col)
+                
+                # Create missed class display info
+                missed_class_display = {
+                    'class_id': missed_class_id,
+                    'class_name': str(missed_class_info[classname_col]) if classname_col and pd.notna(missed_class_info.get(classname_col)) else "N/A",
+                    'subject': str(missed_class_info[subject_col]) if pd.notna(missed_class_info.get(subject_col)) else "N/A",
+                    'stream': str(missed_class_info[stream_col]) if pd.notna(missed_class_info.get(stream_col)) else "N/A",
+                    'ability': str(missed_class_info[ability_col]) if pd.notna(missed_class_info.get(ability_col)) else "N/A"
+                }
         except:
             pass
     
@@ -97,7 +115,7 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
             (students_df[student_name_col].astype(str).str.contains(search_term, case=False, na=False))
         ]
         if filtered.empty:
-            return [{'type': 'error', 'message': f"No student found matching '{search_term}'"}], None, None, []
+            return [{'type': 'error', 'message': f"No student found matching '{search_term}'"}], None, None, [], None
         student_ids = filtered[student_id_col].unique()
     
     # Process each student
@@ -387,7 +405,7 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
             'classes': formatted_classes
         })
     
-    return results, message_student_name, message_subject, message_credit_classes
+    return results, message_student_name, message_subject, message_credit_classes, missed_class_display
 
 
 def format_results_for_export(results):
@@ -451,6 +469,8 @@ if 'last_results' not in st.session_state:
     st.session_state.last_results = None
 if 'message_data' not in st.session_state:
     st.session_state.message_data = None
+if 'missed_class_display' not in st.session_state:
+    st.session_state.missed_class_display = None
 
 # Sidebar for file uploads
 with st.sidebar:
@@ -515,7 +535,7 @@ if st.session_state.classes_df is not None and st.session_state.students_df is n
         else:
             with st.spinner("Processing..."):
                 try:
-                    results, student_name, subject, credit_classes = find_credit_classes(
+                    results, student_name, subject, credit_classes, missed_display = find_credit_classes(
                         st.session_state.classes_df,
                         st.session_state.students_df,
                         search_term if not process_all else None,
@@ -529,6 +549,7 @@ if st.session_state.classes_df is not None and st.session_state.students_df is n
                         'subject': subject,
                         'credit_classes': credit_classes
                     }
+                    st.session_state.missed_class_display = missed_display
                     
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
@@ -536,6 +557,21 @@ if st.session_state.classes_df is not None and st.session_state.students_df is n
     # Display results
     if st.session_state.last_results:
         st.markdown("---")
+        
+        # Display missed class info if available
+        if st.session_state.missed_class_display:
+            missed = st.session_state.missed_class_display
+            st.markdown(f"""
+            <div class="missed-class-info">
+                <h3 style="color: #ff6464; margin-top: 0;">🎯 MISSED CLASS INFORMATION</h3>
+                <p style="margin: 5px 0;"><strong>ClassID:</strong> {missed['class_id']}</p>
+                <p style="margin: 5px 0;"><strong>Class Name:</strong> {missed['class_name']}</p>
+                <p style="margin: 5px 0;"><strong>Subject:</strong> {missed['subject']}</p>
+                <p style="margin: 5px 0;"><strong>Stream:</strong> {missed['stream']}</p>
+                <p style="margin: 5px 0;"><strong>Ability:</strong> {missed['ability']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
         st.markdown("### 📊 Results")
         
         # Display results in formatted boxes
@@ -570,6 +606,7 @@ if st.session_state.classes_df is not None and st.session_state.students_df is n
                     st.warning("⚠️ No classes available to be credits")
         
         # Export and message buttons
+        st.markdown("---")
         col1, col2 = st.columns(2)
         
         with col1:
@@ -584,11 +621,16 @@ if st.session_state.classes_df is not None and st.session_state.students_df is n
             )
         
         with col2:
-            # Copy message template
-            if st.session_state.message_data and missed_class_id:
-                if st.button("📋 Show Message Template", use_container_width=True):
+            # Copy message template - show button if we have the data
+            if (st.session_state.message_data and 
+                st.session_state.message_data.get('credit_classes') and 
+                len(st.session_state.message_data.get('credit_classes', [])) > 0 and
+                st.session_state.missed_class_display):
+                if st.button("📋 Copy Message Template", use_container_width=True, type="secondary"):
                     message = generate_message_template(st.session_state.message_data)
-                    st.text_area("Message Template (Copy this)", message, height=200)
+                    st.text_area("📧 Message Template (Copy this)", message, height=200, key="message_display")
+            else:
+                st.button("📋 Copy Message Template", use_container_width=True, disabled=True, help="Enter a Missed Class ID to enable message template")
 
 else:
     # Welcome screen
@@ -609,18 +651,20 @@ else:
         - Classes must be in the **same year** as the student
         - Only **Group classes** with **Active status** are shown
         - Classes must be at times when **student is free**
-        - If student has **both Stream A & B** of a subject:
-          - Priority 1: Different subjects (same ability)
-          - Priority 2: Same subject (different ability)
-        - Otherwise:
-          - Same subject, different stream or ability
+        - **For Missed Class Replacements:**
+          - Priority 1: Same subject, different stream
+          - Priority 2: Different subject (same ability)
+          - Priority 3: Different ability levels
+        - **For General Credits:**
+          - If student has **both Stream A & B** of a subject:
+            - Priority 1: Different subjects (same ability)
+            - Priority 2: Same subject (different ability)
+          - Otherwise:
+            - Same subject, different stream or ability
         """)
 
 # Footer
 st.markdown("""
 <div class="footer">
-    <p>© 2025 Credit Class Finder | Developed by Mohammed Abdelwahed | Version 1.7.2</p>
-    <p style="font-size: 0.8rem;">All Rights Reserved</p>
-</div>
-""", unsafe_allow_html=True)
-
+    <p>© 2026 Credit Class Finder | Developed by Mohammed Abdelwahed | Version 1.7.7</p>
+    <p style="font-size: 0.8rem;">All Rights
