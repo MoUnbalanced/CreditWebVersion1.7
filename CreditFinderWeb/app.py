@@ -666,5 +666,8 @@ else:
 # Footer
 st.markdown("""
 <div class="footer">
-    <p>© 2026 Credit Class Finder | Developed by Mohammed Abdelwahed | Version 1.7.7</p>
-    <p style="font-size: 0.8rem;">All Rights
+    <p>© 2026 Credit Class Finder | Developed by Mohammed Abdelwahed | Version 1.7.2</p>
+    <p style="font-size: 0.8rem;">All Rights Reserved</p>
+</div>
+""", unsafe_allow_html=True)
+
