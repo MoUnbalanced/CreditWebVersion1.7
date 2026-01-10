@@ -50,190 +50,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Header
-st.markdown('<h1 class="main-header">⚡ STUDENT CREDIT CLASS FINDER ⚡</h1>', unsafe_allow_html=True)
-st.markdown("---")
 
-# Initialize session state
-if 'classes_df' not in st.session_state:
-    st.session_state.classes_df = None
-if 'students_df' not in st.session_state:
-    st.session_state.students_df = None
-if 'last_results' not in st.session_state:
-    st.session_state.last_results = None
-if 'message_data' not in st.session_state:
-    st.session_state.message_data = None
-
-# Sidebar for file uploads
-with st.sidebar:
-    st.header("📂 Upload Files")
-    
-    classes_file = st.file_uploader(
-        "Upload Classes File",
-        type=['xlsx', 'xls'],
-        help="Excel file containing class information"
-    )
-    
-    students_file = st.file_uploader(
-        "Upload Students File",
-        type=['xlsx', 'xls'],
-        help="Excel file containing student enrollments"
-    )
-    
-    if classes_file and students_file:
-        if st.button("⚡ Load Files", type="primary", use_container_width=True):
-            with st.spinner("Loading files..."):
-                try:
-                    st.session_state.classes_df = pd.read_excel(classes_file)
-                    st.session_state.students_df = pd.read_excel(students_file)
-                    st.success("✅ Files loaded successfully!")
-                    st.info(f"📊 {len(st.session_state.classes_df)} classes | {len(st.session_state.students_df)} enrollments")
-                except Exception as e:
-                    st.error(f"Error loading files: {str(e)}")
-    
-    st.markdown("---")
-    st.markdown("### 💡 About")
-    st.info("This tool helps find suitable credit classes for students based on their schedule and subjects.")
-
-# Main content
-if st.session_state.classes_df is not None and st.session_state.students_df is not None:
-    
-    # Search section
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        search_term = st.text_input(
-            "🔍 Search for Student (Name or ID)",
-            placeholder="Enter student name or ID...",
-            key="search_input"
-        )
-    
-    with col2:
-        st.write("")  # Spacer
-        st.write("")  # Spacer
-        process_all = st.checkbox("Process All Students")
-    
-    # Missed class section
-    missed_class_id = st.text_input(
-        "🎯 Missed Class ID (Optional)",
-        placeholder="Leave blank for general credits, or enter ClassID for replacements",
-        help="Enter a specific ClassID to find replacement classes"
-    )
-    
-    # Search button
-    if st.button("🔎 Find Credit Classes", type="primary", use_container_width=True):
-        if not search_term and not process_all:
-            st.warning("⚠️ Please enter a student name/ID or check 'Process All Students'")
-        else:
-            with st.spinner("Processing..."):
-                try:
-                    results, student_name, subject, credit_classes = find_credit_classes(
-                        st.session_state.classes_df,
-                        st.session_state.students_df,
-                        search_term if not process_all else None,
-                        missed_class_id if missed_class_id else None,
-                        process_all
-                    )
-                    
-                    st.session_state.last_results = results
-                    st.session_state.message_data = {
-                        'student_name': student_name,
-                        'subject': subject,
-                        'credit_classes': credit_classes
-                    }
-                    
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
-    
-    # Display results
-    if st.session_state.last_results:
-        st.markdown("---")
-        st.markdown("### 📊 Results")
-        
-        # Display results in formatted boxes
-        for result_section in st.session_state.last_results:
-            if result_section['type'] == 'student_info':
-                st.markdown(f"""
-                <div class="result-box">
-                    <h3 style="color: #00d9ff; margin: 0;">👤 {result_section['name']}</h3>
-                    <p style="color: #888; margin: 5px 0;">ID: {result_section['id']} | Year: {result_section['year']}</p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                if result_section.get('note'):
-                    st.info(result_section['note'])
-                
-            elif result_section['type'] == 'credit_classes':
-                if result_section['classes']:
-                    st.success(f"✅ Found {len(result_section['classes'])} credit class(es)")
-                    
-                    for i, cls in enumerate(result_section['classes'], 1):
-                        st.markdown(f"""
-                        <div class="credit-class">
-                            <strong>[{i}] {cls['subject']} (Stream {cls['stream']})</strong> - {cls['ability']}<br>
-                            📅 {cls['day']} @ {cls['time']} | 🆔 ClassID: {cls['class_id']}
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.warning("⚠️ No classes available to be credits")
-        
-        # Export and message buttons
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Export to text
-            results_text = format_results_for_export(st.session_state.last_results)
-            st.download_button(
-                label="💾 Export Results",
-                data=results_text,
-                file_name=f"credit_classes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
-        
-        with col2:
-            # Copy message template
-            if st.session_state.message_data and missed_class_id:
-                if st.button("📋 Copy Message Template", use_container_width=True):
-                    message = generate_message_template(st.session_state.message_data)
-                    st.text_area("Message Template (Copy this)", message, height=200)
-
-else:
-    # Welcome screen
-    st.info("👆 Please upload both Excel files in the sidebar to get started!")
-    
-    with st.expander("📖 How to use"):
-        st.markdown("""
-        1. **Upload Files**: Upload your Classes and Students Excel files in the sidebar
-        2. **Load Files**: Click the "Load Files" button
-        3. **Search**: Enter a student name or ID, or check "Process All"
-        4. **Optional**: Enter a Missed Class ID to find replacements
-        5. **Find Classes**: Click "Find Credit Classes"
-        6. **Export**: Download results or copy message template
-        """)
-    
-    with st.expander("ℹ️ Rules Applied"):
-        st.markdown("""
-        - Classes must be in the **same year** as the student
-        - Only **Group classes** with **Active status** are shown
-        - Classes must be at times when **student is free**
-        - If student has **both Stream A & B** of a subject:
-          - Priority 1: Different subjects (same ability)
-          - Priority 2: Same subject (different ability)
-        - Otherwise:
-          - Same subject, different stream or ability
-        """)
-
-# Footer
-st.markdown("""
-<div class="footer">
-    <p>© 2025 Credit Class Finder | Developed by Mohammed Abdelwahed | Version 1.7.2</p>
-    <p style="font-size: 0.8rem;">All Rights Reserved</p>
-</div>
-""", unsafe_allow_html=True)
-
-
-# Helper Functions
+# Helper Functions (MUST BE DEFINED BEFORE USE)
 def find_credit_classes(classes_df, students_df, search_term, missed_class_id, process_all):
     """Main logic for finding credit classes"""
     results = []
@@ -267,6 +85,8 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
             (students_df[student_id_col].astype(str).str.contains(search_term, case=False, na=False)) |
             (students_df[student_name_col].astype(str).str.contains(search_term, case=False, na=False))
         ]
+        if filtered.empty:
+            return [{'type': 'error', 'message': f"No student found matching '{search_term}'"}], None, None, []
         student_ids = filtered[student_id_col].unique()
     
     # Process each student
@@ -492,3 +312,190 @@ def generate_message_template(data):
 Best regards,"""
     
     return message
+
+
+# Header
+st.markdown('<h1 class="main-header">⚡ STUDENT CREDIT CLASS FINDER ⚡</h1>', unsafe_allow_html=True)
+st.markdown("---")
+
+# Initialize session state
+if 'classes_df' not in st.session_state:
+    st.session_state.classes_df = None
+if 'students_df' not in st.session_state:
+    st.session_state.students_df = None
+if 'last_results' not in st.session_state:
+    st.session_state.last_results = None
+if 'message_data' not in st.session_state:
+    st.session_state.message_data = None
+
+# Sidebar for file uploads
+with st.sidebar:
+    st.header("📂 Upload Files")
+    
+    classes_file = st.file_uploader(
+        "Upload Classes File",
+        type=['xlsx', 'xls'],
+        help="Excel file containing class information"
+    )
+    
+    students_file = st.file_uploader(
+        "Upload Students File",
+        type=['xlsx', 'xls'],
+        help="Excel file containing student enrollments"
+    )
+    
+    if classes_file and students_file:
+        if st.button("⚡ Load Files", type="primary", use_container_width=True):
+            with st.spinner("Loading files..."):
+                try:
+                    st.session_state.classes_df = pd.read_excel(classes_file)
+                    st.session_state.students_df = pd.read_excel(students_file)
+                    st.success("✅ Files loaded successfully!")
+                    st.info(f"📊 {len(st.session_state.classes_df)} classes | {len(st.session_state.students_df)} enrollments")
+                except Exception as e:
+                    st.error(f"Error loading files: {str(e)}")
+    
+    st.markdown("---")
+    st.markdown("### 💡 About")
+    st.info("This tool helps find suitable credit classes for students based on their schedule and subjects.")
+
+# Main content
+if st.session_state.classes_df is not None and st.session_state.students_df is not None:
+    
+    # Search section
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        search_term = st.text_input(
+            "🔍 Search for Student (Name or ID)",
+            placeholder="Enter student name or ID...",
+            key="search_input"
+        )
+    
+    with col2:
+        st.write("")  # Spacer
+        st.write("")  # Spacer
+        process_all = st.checkbox("Process All Students")
+    
+    # Missed class section
+    missed_class_id = st.text_input(
+        "🎯 Missed Class ID (Optional)",
+        placeholder="Leave blank for general credits, or enter ClassID for replacements",
+        help="Enter a specific ClassID to find replacement classes"
+    )
+    
+    # Search button
+    if st.button("🔎 Find Credit Classes", type="primary", use_container_width=True):
+        if not search_term and not process_all:
+            st.warning("⚠️ Please enter a student name/ID or check 'Process All Students'")
+        else:
+            with st.spinner("Processing..."):
+                try:
+                    results, student_name, subject, credit_classes = find_credit_classes(
+                        st.session_state.classes_df,
+                        st.session_state.students_df,
+                        search_term if not process_all else None,
+                        missed_class_id if missed_class_id else None,
+                        process_all
+                    )
+                    
+                    st.session_state.last_results = results
+                    st.session_state.message_data = {
+                        'student_name': student_name,
+                        'subject': subject,
+                        'credit_classes': credit_classes
+                    }
+                    
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+    
+    # Display results
+    if st.session_state.last_results:
+        st.markdown("---")
+        st.markdown("### 📊 Results")
+        
+        # Display results in formatted boxes
+        for result_section in st.session_state.last_results:
+            if result_section.get('type') == 'error':
+                st.error(result_section['message'])
+                continue
+                
+            if result_section['type'] == 'student_info':
+                st.markdown(f"""
+                <div class="result-box">
+                    <h3 style="color: #00d9ff; margin: 0;">👤 {result_section['name']}</h3>
+                    <p style="color: #888; margin: 5px 0;">ID: {result_section['id']} | Year: {result_section['year']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                if result_section.get('note'):
+                    st.info(result_section['note'])
+                
+            elif result_section['type'] == 'credit_classes':
+                if result_section['classes']:
+                    st.success(f"✅ Found {len(result_section['classes'])} credit class(es)")
+                    
+                    for i, cls in enumerate(result_section['classes'], 1):
+                        st.markdown(f"""
+                        <div class="credit-class">
+                            <strong>[{i}] {cls['subject']} (Stream {cls['stream']})</strong> - {cls['ability']}<br>
+                            📅 {cls['day']} @ {cls['time']} | 🆔 ClassID: {cls['class_id']}
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.warning("⚠️ No classes available to be credits")
+        
+        # Export and message buttons
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Export to text
+            results_text = format_results_for_export(st.session_state.last_results)
+            st.download_button(
+                label="💾 Export Results",
+                data=results_text,
+                file_name=f"credit_classes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+        
+        with col2:
+            # Copy message template
+            if st.session_state.message_data and missed_class_id:
+                if st.button("📋 Show Message Template", use_container_width=True):
+                    message = generate_message_template(st.session_state.message_data)
+                    st.text_area("Message Template (Copy this)", message, height=200)
+
+else:
+    # Welcome screen
+    st.info("👆 Please upload both Excel files in the sidebar to get started!")
+    
+    with st.expander("📖 How to use"):
+        st.markdown("""
+        1. **Upload Files**: Upload your Classes and Students Excel files in the sidebar
+        2. **Load Files**: Click the "Load Files" button
+        3. **Search**: Enter a student name or ID, or check "Process All"
+        4. **Optional**: Enter a Missed Class ID to find replacements
+        5. **Find Classes**: Click "Find Credit Classes"
+        6. **Export**: Download results or copy message template
+        """)
+    
+    with st.expander("ℹ️ Rules Applied"):
+        st.markdown("""
+        - Classes must be in the **same year** as the student
+        - Only **Group classes** with **Active status** are shown
+        - Classes must be at times when **student is free**
+        - If student has **both Stream A & B** of a subject:
+          - Priority 1: Different subjects (same ability)
+          - Priority 2: Same subject (different ability)
+        - Otherwise:
+          - Same subject, different stream or ability
+        """)
+
+# Footer
+st.markdown("""
+<div class="footer">
+    <p>© 2025 Credit Class Finder | Developed by Mohammed Abdelwahed | Version 1.7.2</p>
+    <p style="font-size: 0.8rem;">All Rights Reserved</p>
+</div>
+""", unsafe_allow_html=True)
