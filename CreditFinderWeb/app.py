@@ -54,6 +54,15 @@ st.markdown("""
         border-top: 1px solid #333;
         margin-top: 50px;
     }
+    
+    /* Hide Fork button and toolbar menu */
+    [data-testid="stToolbar"] {visibility: hidden;}
+    .stDeployButton {visibility: hidden;}
+    [data-testid="stDecoration"] {visibility: hidden;}
+    button[kind="header"] {visibility: hidden;}
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -670,4 +679,3 @@ st.markdown("""
     <p style="font-size: 0.8rem;">All Rights Reserved</p>
 </div>
 """, unsafe_allow_html=True)
-
