@@ -54,9 +54,19 @@ st.markdown("""
         border-top: 1px solid #333;
         margin-top: 50px;
     }
-        /* Hide Fork button and 3-dot menu */
-    header[data-testid="stHeader"] > div:nth-child(2) {
-        display: none;
+    /* Hide only the deploy button, GitHub fork, and 3-dot menu */
+    button[kind="header"] {
+        display: none !important;
+    }
+    
+    /* Hide the main menu (3 dots) */
+    #MainMenu {
+        display: none !important;
+    }
+    
+    /* Hide Streamlit footer */
+    footer {
+        visibility: hidden;
     }
     
 </style>
@@ -675,5 +685,6 @@ st.markdown("""
     <p style="font-size: 0.8rem;">All Rights Reserved</p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
