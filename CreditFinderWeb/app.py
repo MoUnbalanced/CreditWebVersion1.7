@@ -6,7 +6,7 @@ import io
 # Page config
 st.set_page_config(
     page_title="Credit Class Finder",
-    page_icon="⚡👌",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -681,8 +681,9 @@ else:
 # Footer
 st.markdown("""
 <div class="footer">
-    <p>© 2026 Credit Class Finder | Developed by Mohammed Abdelwahed | Version 1.7.2</p>
+    <p>© 2026 Credit Class Finder | Developed by Mohammed Abdelwahed | Version 1.7.7</p>
     <p style="font-size: 0.8rem;">All Rights Reserved</p>
 </div>
 """, unsafe_allow_html=True)
+
 
