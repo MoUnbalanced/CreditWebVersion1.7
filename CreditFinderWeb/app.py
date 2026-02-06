@@ -55,14 +55,20 @@ st.markdown("""
         margin-top: 50px;
     }
     
-    /* Hide Fork button and toolbar menu */
-    [data-testid="stToolbar"] {visibility: hidden;}
+    /* Hide Fork button and toolbar menu - but keep sidebar toggle */
+    [data-testid="stToolbar"] {
+        visibility: hidden !important;
+    }
+    
+    /* Show only the sidebar collapse button */
+    [data-testid="collapsedControl"] {
+        visibility: visible !important;
+    }
+    
     .stDeployButton {visibility: hidden;}
-    [data-testid="stDecoration"] {visibility: hidden;}
     button[kind="header"] {visibility: hidden;}
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
