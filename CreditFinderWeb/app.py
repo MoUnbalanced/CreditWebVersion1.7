@@ -6,7 +6,7 @@ import io
 # Page config
 st.set_page_config(
     page_title="Credit Class Finder",
-    page_icon="⚡",
+    page_icon="⚡👌",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -685,3 +685,4 @@ st.markdown("""
     <p style="font-size: 0.8rem;">All Rights Reserved</p>
 </div>
 """, unsafe_allow_html=True)
+
