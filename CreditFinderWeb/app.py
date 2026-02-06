@@ -54,21 +54,6 @@ st.markdown("""
         border-top: 1px solid #333;
         margin-top: 50px;
     }
-    
-    /* Hide Fork button and toolbar menu - but keep sidebar toggle */
-    [data-testid="stToolbar"] {
-        visibility: hidden !important;
-    }
-    
-    /* Show only the sidebar collapse button */
-    [data-testid="collapsedControl"] {
-        visibility: visible !important;
-    }
-    
-    .stDeployButton {visibility: hidden;}
-    button[kind="header"] {visibility: hidden;}
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -681,9 +666,7 @@ else:
 # Footer
 st.markdown("""
 <div class="footer">
-    <p>© 2026 Credit Class Finder | Developed by Mohammed Abdelwahed | Version 1.7.7</p>
+    <p>© 2026 Credit Class Finder | Developed by Mohammed Abdelwahed | Version 1.7.2</p>
     <p style="font-size: 0.8rem;">All Rights Reserved</p>
 </div>
 """, unsafe_allow_html=True)
-
-
