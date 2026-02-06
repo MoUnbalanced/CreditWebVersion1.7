@@ -54,6 +54,15 @@ st.markdown("""
         border-top: 1px solid #333;
         margin-top: 50px;
     }
+        /* Hide Fork button and 3-dot menu */
+    header[data-testid="stHeader"] > div:nth-child(2) {
+        display: none;
+    }
+    
+    /* Alternative: More specific targeting */
+    [data-testid="stToolbar"] {
+        display: none !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -670,3 +679,4 @@ st.markdown("""
     <p style="font-size: 0.8rem;">All Rights Reserved</p>
 </div>
 """, unsafe_allow_html=True)
+
