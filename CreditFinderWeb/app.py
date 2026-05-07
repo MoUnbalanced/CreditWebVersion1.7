@@ -54,41 +54,35 @@ st.markdown("""
         border-top: 1px solid #333;
         margin-top: 50px;
     }
-    /* Hide only the deploy button, GitHub fork, and 3-dot menu */
     button[kind="header"] {
         display: none !important;
     }
-    
-    /* Hide the main menu (3 dots) */
     #MainMenu {
         display: none !important;
     }
-    
-    /* Hide Streamlit footer */
     footer {
         visibility: hidden;
     }
-    
 </style>
 """, unsafe_allow_html=True)
 
 
 # Helper Functions
 def find_credit_classes(classes_df, students_df, search_term, missed_class_id, process_all):
-    """Main logic for finding credit classes - MATCHES DESKTOP VERSION"""
+    """Main logic for finding credit classes"""
     results = []
     message_student_name = None
     message_subject = None
     message_credit_classes = []
     missed_class_display = None
-    
+
     # Detect columns
     student_id_col = next((col for col in students_df.columns if 'student' in col.lower() and 'id' in col.lower()), None)
     student_name_col = next((col for col in students_df.columns if 'student' in col.lower() and 'name' in col.lower()), None)
     class_id_col = next((col for col in students_df.columns if 'class' in col.lower() and 'id' in col.lower()), None)
     year_col = next((col for col in students_df.columns if 'year' in col.lower()), None)
     time_col = next((col for col in students_df.columns if 'time' in col.lower()), None)
-    
+
     class_id_col_classes = next((col for col in classes_df.columns if 'class' in col.lower() and 'id' in col.lower()), None)
     subject_col = next((col for col in classes_df.columns if 'subject' in col.lower()), None)
     stream_col = next((col for col in classes_df.columns if 'stream' in col.lower()), None)
@@ -100,7 +94,7 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
     status_col = next((col for col in classes_df.columns if 'status' in col.lower()), None)
     duration_col = next((col for col in classes_df.columns if 'duration' in col.lower()), None)
     classname_col = next((col for col in classes_df.columns if 'class' in col.lower() and 'name' in col.lower()), None)
-    
+
     # Get missed class info if provided
     missed_class_info = None
     if missed_class_id:
@@ -109,8 +103,7 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
             if not missed_class_row.empty:
                 missed_class_info = missed_class_row.iloc[0]
                 message_subject = missed_class_info.get(subject_col)
-                
-                # Create missed class display info
+
                 missed_class_display = {
                     'class_id': missed_class_id,
                     'class_name': str(missed_class_info[classname_col]) if classname_col and pd.notna(missed_class_info.get(classname_col)) else "N/A",
@@ -120,7 +113,7 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
                 }
         except:
             pass
-    
+
     # Filter students
     if process_all:
         student_ids = students_df[student_id_col].unique()
@@ -132,68 +125,64 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
         if filtered.empty:
             return [{'type': 'error', 'message': f"No student found matching '{search_term}'"}], None, None, [], None
         student_ids = filtered[student_id_col].unique()
-    
+
     # Process each student
     for student_id in student_ids:
         student_classes = students_df[students_df[student_id_col] == student_id].copy()
-        
+
         if student_classes.empty:
             continue
-        
+
         student_info = student_classes.iloc[0]
         student_name = str(student_info[student_name_col]) if pd.notna(student_info.get(student_name_col)) else "Unknown"
         student_year = student_info[year_col] if pd.notna(student_info.get(year_col)) else "Unknown"
-        
+
         if message_student_name is None:
             message_student_name = student_name
-        
-        # Get enrolled classes and times
+
         enrolled_classes = []
         enrolled_times = []
-        
+
         for idx in student_classes.index:
             class_val = student_classes.loc[idx, class_id_col]
             if pd.notna(class_val):
                 enrolled_classes.append(class_val)
-            
+
             if time_col:
                 time_val = student_classes.loc[idx, time_col]
                 if pd.notna(time_val):
                     enrolled_times.append(time_val)
-        
-        # Track subject/stream/ability map
+
         subject_stream_ability_map = {}
         student_all_abilities = set()
-        
+
         for idx in student_classes.index:
             class_id = student_classes.loc[idx, class_id_col]
             if pd.isna(class_id):
                 continue
-            
+
             class_info = classes_df[classes_df[class_id_col_classes] == class_id]
             if not class_info.empty:
                 subject = class_info.iloc[0][subject_col]
                 stream = class_info.iloc[0][stream_col]
                 ability = class_info.iloc[0][ability_col]
-                
+
                 if pd.notna(subject) and pd.notna(stream) and pd.notna(ability):
                     if subject not in subject_stream_ability_map:
                         subject_stream_ability_map[subject] = {}
                     if stream not in subject_stream_ability_map[subject]:
                         subject_stream_ability_map[subject][stream] = set()
-                    
+
                     subject_stream_ability_map[subject][stream].add(ability)
                     student_all_abilities.add(ability)
-        
-        # Find subjects with both streams
+
         subjects_with_both_streams = set()
         for subject, streams in subject_stream_ability_map.items():
             if len(streams) >= 2:
                 subjects_with_both_streams.add(subject)
-        
+
         all_student_subjects = set(subject_stream_ability_map.keys())
-        
-        # Get available classes
+
         if classtype_col and status_col:
             available_classes = classes_df[
                 (classes_df[year_col_classes] == student_year) &
@@ -204,144 +193,134 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
             ].copy()
         else:
             available_classes = classes_df[classes_df[year_col_classes] == student_year].copy()
-        
-        # Find credit classes with PRIORITY SYSTEM
+
         credit_classes_final = []
-        
+
         if missed_class_info is not None:
-            # MISSED CLASS REPLACEMENT - 3 PRIORITY LEVELS
             missed_subject = missed_class_info.get(subject_col)
             missed_stream = missed_class_info.get(stream_col)
-            
-            priority_1 = []  # Same subject, different stream
-            priority_2 = []  # Different subject (not in both streams), same ability
-            priority_3 = []  # Different ability levels
-            
-            # PRIORITY 1: Same subject, different stream (if student doesn't have both)
+
+            priority_1 = []
+            priority_2 = []
+            priority_3 = []
+
             if missed_subject not in subjects_with_both_streams:
                 for idx in available_classes.index:
                     available_class = available_classes.loc[idx]
                     class_id = available_class[class_id_col_classes]
-                    
+
                     if pd.isna(class_id) or class_id in enrolled_classes:
                         continue
                     if str(class_id) == str(missed_class_id):
                         continue
-                    
-                    # Time conflict check
+
                     if time_col_classes:
                         class_time = available_class[time_col_classes]
                         if pd.notna(class_time) and class_time in enrolled_times:
                             continue
-                    
+
                     subject = available_class[subject_col]
                     stream = available_class[stream_col]
                     ability = available_class[ability_col]
-                    
+
                     if pd.isna(subject) or pd.isna(stream) or pd.isna(ability):
                         continue
-                    
+
                     if subject == missed_subject and stream != missed_stream:
                         priority_1.append(available_class)
-            
-            # PRIORITY 2: Different subjects (same ability)
+
             for idx in available_classes.index:
                 available_class = available_classes.loc[idx]
                 class_id = available_class[class_id_col_classes]
-                
+
                 if pd.isna(class_id) or class_id in enrolled_classes:
                     continue
                 if str(class_id) == str(missed_class_id):
                     continue
-                
+
                 if time_col_classes:
                     class_time = available_class[time_col_classes]
                     if pd.notna(class_time) and class_time in enrolled_times:
                         continue
-                
+
                 subject = available_class[subject_col]
                 stream = available_class[stream_col]
                 ability = available_class[ability_col]
-                
+
                 if pd.isna(subject) or pd.isna(stream) or pd.isna(ability):
                     continue
-                
+
                 if subject in subjects_with_both_streams or subject == missed_subject:
                     continue
-                
+
                 if ability in student_all_abilities:
                     priority_2.append(available_class)
-            
-            # PRIORITY 3: Different abilities
+
             if not priority_1 and not priority_2:
                 for idx in available_classes.index:
                     available_class = available_classes.loc[idx]
                     class_id = available_class[class_id_col_classes]
-                    
+
                     if pd.isna(class_id) or class_id in enrolled_classes:
                         continue
                     if str(class_id) == str(missed_class_id):
                         continue
-                    
+
                     if time_col_classes:
                         class_time = available_class[time_col_classes]
                         if pd.notna(class_time) and class_time in enrolled_times:
                             continue
-                    
+
                     subject = available_class[subject_col]
                     stream = available_class[stream_col]
                     ability = available_class[ability_col]
-                    
+
                     if pd.isna(subject) or pd.isna(stream) or pd.isna(ability):
                         continue
-                    
+
                     if subject in subject_stream_ability_map:
                         if stream in subject_stream_ability_map[subject]:
                             if ability not in subject_stream_ability_map[subject][stream]:
                                 priority_3.append(available_class)
-            
-            # Use highest priority available
+
             if priority_1:
                 credit_classes_final = priority_1
             elif priority_2:
                 credit_classes_final = priority_2
             else:
                 credit_classes_final = priority_3
-                
+
         else:
-            # GENERAL CREDIT CLASS LOGIC
             priority_1 = []
             priority_2 = []
             priority_3 = []
-            
+
             for idx in available_classes.index:
                 available_class = available_classes.loc[idx]
                 class_id = available_class[class_id_col_classes]
-                
+
                 if pd.isna(class_id) or class_id in enrolled_classes:
                     continue
-                
+
                 if time_col_classes:
                     class_time = available_class[time_col_classes]
                     if pd.notna(class_time) and class_time in enrolled_times:
                         continue
-                
+
                 subject = available_class[subject_col]
                 stream = available_class[stream_col]
                 ability = available_class[ability_col]
-                
+
                 if pd.isna(subject) or pd.isna(stream) or pd.isna(ability):
                     continue
-                
+
                 subject_has_both_streams = subject in subjects_with_both_streams
-                
+
                 if subject_has_both_streams:
-                    # Priority 2: Different ability for subject with both streams
                     if stream in subject_stream_ability_map[subject]:
                         if ability not in subject_stream_ability_map[subject][stream]:
                             priority_2.append(available_class)
                 else:
-                    # Priority 1: Different stream or new subject
                     if subject not in all_student_subjects:
                         if ability in student_all_abilities:
                             priority_1.append(available_class)
@@ -354,37 +333,35 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
                         elif stream in subject_stream_ability_map[subject]:
                             if ability not in subject_stream_ability_map[subject][stream]:
                                 priority_1.append(available_class)
-            
-            # Use highest priority
+
             if priority_1:
                 credit_classes_final = priority_1
             elif priority_2:
                 credit_classes_final = priority_2
             else:
                 credit_classes_final = priority_3
-        
+
         # Format results
         formatted_classes = []
         for credit in credit_classes_final:
-            # Format time
             time_display = "N/A"
             if time_col_classes and pd.notna(credit.get(time_col_classes)):
                 try:
                     start_time = credit[time_col_classes]
                     if isinstance(start_time, str):
                         start_time = datetime.strptime(start_time, "%H:%M:%S").time()
-                    
+
                     if hasattr(start_time, 'hour'):
                         duration_minutes = 60
                         if duration_col and pd.notna(credit.get(duration_col)):
                             duration_minutes = int(credit[duration_col])
-                        
+
                         start_dt = datetime.combine(datetime.today(), start_time)
                         end_dt = start_dt + timedelta(minutes=duration_minutes)
                         time_display = f"{start_dt.strftime('%I:%M %p').lstrip('0')} - {end_dt.strftime('%I:%M %p').lstrip('0')}"
                 except:
                     time_display = str(credit[time_col_classes])
-            
+
             formatted_classes.append({
                 'class_id': str(credit[class_id_col_classes]),
                 'subject': str(credit[subject_col]),
@@ -393,7 +370,7 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
                 'day': str(credit[day_col]).title() if day_col and pd.notna(credit.get(day_col)) else "N/A",
                 'time': time_display
             })
-            
+
             message_credit_classes.append({
                 'day': str(credit[day_col]).title() if day_col and pd.notna(credit.get(day_col)) else "N/A",
                 'time': time_display,
@@ -401,12 +378,11 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
                 'stream': str(credit[stream_col]).upper(),
                 'ability': str(credit[ability_col]).title()
             })
-        
-        # Add to results
+
         note = None
         if subjects_with_both_streams:
             note = f"📌 Student has BOTH Stream A and Stream B in: {', '.join(subjects_with_both_streams)}"
-        
+
         results.append({
             'type': 'student_info',
             'name': student_name,
@@ -414,12 +390,12 @@ def find_credit_classes(classes_df, students_df, search_term, missed_class_id, p
             'year': student_year,
             'note': note
         })
-        
+
         results.append({
             'type': 'credit_classes',
             'classes': formatted_classes
         })
-    
+
     return results, message_student_name, message_subject, message_credit_classes, missed_class_display
 
 
@@ -427,14 +403,14 @@ def format_results_for_export(results):
     """Format results as plain text for export"""
     text = "CREDIT CLASS FINDER - RESULTS\n"
     text += "=" * 80 + "\n\n"
-    
+
     for section in results:
         if section['type'] == 'student_info':
             text += f"Student: {section['name']} (ID: {section['id']}) - Year {section['year']}\n"
             text += "-" * 80 + "\n"
             if section.get('note'):
                 text += f"{section['note']}\n\n"
-        
+
         elif section['type'] == 'credit_classes':
             if section['classes']:
                 text += f"Available Credit Classes: {len(section['classes'])}\n\n"
@@ -443,39 +419,48 @@ def format_results_for_export(results):
                     text += f"      {cls['day']} @ {cls['time']} | ClassID: {cls['class_id']}\n\n"
             else:
                 text += "No classes available to be credits\n\n"
-        
+
         text += "\n"
-    
+
     return text
 
 
-def generate_message_template(data):
-    """Generate message template"""
-    student_name = data['student_name']
-    subject = data['subject']
-    credit_classes = data['credit_classes']
-    
-    options = [f"{cls['day']} at {cls['time']}" for cls in credit_classes]
-    
+def generate_message_template(student_name, subject, selected_classes, missed_class_display):
+    """Generate message template from selected classes"""
+    options = [f"{cls['day']} at {cls['time']}" for cls in selected_classes]
+
     if len(options) == 1:
         options_str = options[0]
     elif len(options) == 2:
         options_str = f"{options[0]} or {options[1]}"
     else:
         options_str = ", ".join(options[:-1]) + f", or {options[-1]}"
-    
-    message = f"""This is regarding {student_name}'s cancelled {subject} lesson on Christmas Day. We'd like to arrange a replacement class for them on {options_str}. Please let us know if this works for you, and we'll happily book it in.
+
+    # Use subject from missed class if available, otherwise use first selected class subject
+    if subject:
+        subject_str = subject
+    elif selected_classes:
+        subject_str = selected_classes[0]['subject']
+    else:
+        subject_str = "their"
+
+    if missed_class_display:
+        message = f"""This is regarding {student_name}'s cancelled {subject_str} lesson on Christmas Day. We'd like to arrange a replacement class for them on {options_str}. Please let us know if this works for you, and we'll happily book it in.
 
 Best regards,"""
-    
+    else:
+        message = f"""This is regarding {student_name}'s upcoming credit class. We'd like to arrange a class for them on {options_str}. Please let us know if this works for you, and we'll happily book it in.
+
+Best regards,"""
+
     return message
 
 
-# Header
+# ─── Header ───────────────────────────────────────────────────────────────────
 st.markdown('<h1 class="main-header">⚡ STUDENT CREDIT CLASS FINDER ⚡</h1>', unsafe_allow_html=True)
 st.markdown("---")
 
-# Initialize session state
+# ─── Session state ────────────────────────────────────────────────────────────
 if 'classes_df' not in st.session_state:
     st.session_state.classes_df = None
 if 'students_df' not in st.session_state:
@@ -486,23 +471,26 @@ if 'message_data' not in st.session_state:
     st.session_state.message_data = None
 if 'missed_class_display' not in st.session_state:
     st.session_state.missed_class_display = None
+# Track which classes are checked per student result
+if 'selected_classes' not in st.session_state:
+    st.session_state.selected_classes = {}
 
-# Sidebar for file uploads
+# ─── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("📂 Upload Files")
-    
+
     classes_file = st.file_uploader(
         "Upload Classes File",
         type=['xlsx', 'xls'],
         help="Excel file containing class information"
     )
-    
+
     students_file = st.file_uploader(
         "Upload Students File",
         type=['xlsx', 'xls'],
         help="Excel file containing student enrollments"
     )
-    
+
     if classes_file and students_file:
         if st.button("⚡ Load Files", type="primary", use_container_width=True):
             with st.spinner("Loading files..."):
@@ -513,37 +501,34 @@ with st.sidebar:
                     st.info(f"📊 {len(st.session_state.classes_df)} classes | {len(st.session_state.students_df)} enrollments")
                 except Exception as e:
                     st.error(f"Error loading files: {str(e)}")
-    
+
     st.markdown("---")
     st.markdown("### 💡 About")
     st.info("This tool helps find suitable credit classes for students based on their schedule and subjects.")
 
-# Main content
+# ─── Main content ─────────────────────────────────────────────────────────────
 if st.session_state.classes_df is not None and st.session_state.students_df is not None:
-    
-    # Search section
+
     col1, col2 = st.columns([3, 1])
-    
+
     with col1:
         search_term = st.text_input(
             "🔍 Search for Student (Name or ID)",
             placeholder="Enter student name or ID...",
             key="search_input"
         )
-    
+
     with col2:
-        st.write("")  # Spacer
-        st.write("")  # Spacer
+        st.write("")
+        st.write("")
         process_all = st.checkbox("Process All Students")
-    
-    # Missed class section
+
     missed_class_id = st.text_input(
         "🎯 Missed Class ID (Optional)",
         placeholder="Leave blank for general credits, or enter ClassID for replacements",
         help="Enter a specific ClassID to find replacement classes"
     )
-    
-    # Search button
+
     if st.button("🔎 Find Credit Classes", type="primary", use_container_width=True):
         if not search_term and not process_all:
             st.warning("⚠️ Please enter a student name/ID or check 'Process All Students'")
@@ -557,7 +542,7 @@ if st.session_state.classes_df is not None and st.session_state.students_df is n
                         missed_class_id if missed_class_id else None,
                         process_all
                     )
-                    
+
                     st.session_state.last_results = results
                     st.session_state.message_data = {
                         'student_name': student_name,
@@ -565,15 +550,17 @@ if st.session_state.classes_df is not None and st.session_state.students_df is n
                         'credit_classes': credit_classes
                     }
                     st.session_state.missed_class_display = missed_display
-                    
+                    # Reset selections when new search is run
+                    st.session_state.selected_classes = {}
+
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
-    
-    # Display results
+
+    # ─── Results ──────────────────────────────────────────────────────────────
     if st.session_state.last_results:
         st.markdown("---")
-        
-        # Display missed class info if available
+
+        # Missed class info banner
         if st.session_state.missed_class_display:
             missed = st.session_state.missed_class_display
             st.markdown(f"""
@@ -586,15 +573,20 @@ if st.session_state.classes_df is not None and st.session_state.students_df is n
                 <p style="margin: 5px 0;"><strong>Ability:</strong> {missed['ability']}</p>
             </div>
             """, unsafe_allow_html=True)
-        
+
         st.markdown("### 📊 Results")
-        
-        # Display results in formatted boxes
-        for result_section in st.session_state.last_results:
+
+        # Render results — student info blocks + credit class checkboxes
+        student_idx = 0
+        i = 0
+        while i < len(st.session_state.last_results):
+            result_section = st.session_state.last_results[i]
+
             if result_section.get('type') == 'error':
                 st.error(result_section['message'])
+                i += 1
                 continue
-                
+
             if result_section['type'] == 'student_info':
                 st.markdown(f"""
                 <div class="result-box">
@@ -602,30 +594,49 @@ if st.session_state.classes_df is not None and st.session_state.students_df is n
                     <p style="color: #888; margin: 5px 0;">ID: {result_section['id']} | Year: {result_section['year']}</p>
                 </div>
                 """, unsafe_allow_html=True)
-                
+
                 if result_section.get('note'):
                     st.info(result_section['note'])
-                
-            elif result_section['type'] == 'credit_classes':
-                if result_section['classes']:
-                    st.success(f"✅ Found {len(result_section['classes'])} credit class(es)")
-                    
-                    for i, cls in enumerate(result_section['classes'], 1):
-                        st.markdown(f"""
-                        <div class="credit-class">
-                            <strong>[{i}] {cls['subject']} (Stream {cls['stream']})</strong> - {cls['ability']}<br>
-                            📅 {cls['day']} @ {cls['time']} | 🆔 ClassID: {cls['class_id']}
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.warning("⚠️ No classes available to be credits")
-        
-        # Export and message buttons
+
+                # Look ahead for credit classes block
+                if i + 1 < len(st.session_state.last_results):
+                    next_section = st.session_state.last_results[i + 1]
+                    if next_section['type'] == 'credit_classes':
+                        classes = next_section['classes']
+
+                        if classes:
+                            st.success(f"✅ Found {len(classes)} credit class(es) — tick the ones to include in the message")
+
+                            # Init selection dict for this student if needed
+                            sid = str(result_section['id'])
+                            if sid not in st.session_state.selected_classes:
+                                st.session_state.selected_classes[sid] = {}
+
+                            for j, cls in enumerate(classes):
+                                key = f"chk_{sid}_{j}"
+                                default = st.session_state.selected_classes[sid].get(str(j), False)
+
+                                checked = st.checkbox(
+                                    f"**[{j+1}] {cls['subject']} (Stream {cls['stream']})** — {cls['ability']}  \n"
+                                    f"📅 {cls['day']} @ {cls['time']} | 🆔 ClassID: {cls['class_id']}",
+                                    value=default,
+                                    key=key
+                                )
+                                st.session_state.selected_classes[sid][str(j)] = checked
+                        else:
+                            st.warning("⚠️ No classes available to be credits")
+
+                        i += 2  # skip the credit_classes block we just handled
+                        student_idx += 1
+                        continue
+
+            i += 1
+
+        # ─── Export + Message section ──────────────────────────────────────────
         st.markdown("---")
         col1, col2 = st.columns(2)
-        
+
         with col1:
-            # Export to text
             results_text = format_results_for_export(st.session_state.last_results)
             st.download_button(
                 label="💾 Export Results",
@@ -634,23 +645,54 @@ if st.session_state.classes_df is not None and st.session_state.students_df is n
                 mime="text/plain",
                 use_container_width=True
             )
-        
+
         with col2:
-            # Copy message template - show button if we have the data
-            if (st.session_state.message_data and 
-                st.session_state.message_data.get('credit_classes') and 
-                len(st.session_state.message_data.get('credit_classes', [])) > 0 and
-                st.session_state.missed_class_display):
-                if st.button("📋 Copy Message Template", use_container_width=True, type="secondary"):
-                    message = generate_message_template(st.session_state.message_data)
-                    st.text_area("📧 Message Template (Copy this)", message, height=200, key="message_display")
-            else:
-                st.button("📋 Copy Message Template", use_container_width=True, disabled=True, help="Enter a Missed Class ID to enable message template")
+            # Collect all selected classes across all students
+            all_selected = []
+            results_list = st.session_state.last_results
+            k = 0
+            while k < len(results_list):
+                sec = results_list[k]
+                if sec.get('type') == 'student_info':
+                    sid = str(sec['id'])
+                    if k + 1 < len(results_list) and results_list[k + 1]['type'] == 'credit_classes':
+                        classes = results_list[k + 1]['classes']
+                        sel_map = st.session_state.selected_classes.get(sid, {})
+                        for j, cls in enumerate(classes):
+                            if sel_map.get(str(j), False):
+                                all_selected.append(cls)
+                        k += 2
+                        continue
+                k += 1
+
+            if st.button("📋 Generate Message Template", use_container_width=True, type="secondary",
+                         disabled=(len(all_selected) == 0)):
+                md = st.session_state.message_data or {}
+                message = generate_message_template(
+                    student_name=md.get('student_name', 'the student'),
+                    subject=md.get('subject'),
+                    selected_classes=all_selected,
+                    missed_class_display=st.session_state.missed_class_display
+                )
+                st.session_state['generated_message'] = message
+
+            if len(all_selected) == 0:
+                st.caption("Tick at least one class above to enable the message template.")
+
+        # Show generated message below the columns
+        if st.session_state.get('generated_message'):
+            st.markdown("#### 📧 Message Template")
+            st.text_area(
+                "Copy the message below",
+                st.session_state['generated_message'],
+                height=200,
+                key="message_display"
+            )
 
 else:
     # Welcome screen
     st.info("👆 Please upload both Excel files in the sidebar to get started!")
-    
+
     with st.expander("📖 How to use"):
         st.markdown("""
         1. **Upload Files**: Upload your Classes and Students Excel files in the sidebar
@@ -658,9 +700,11 @@ else:
         3. **Search**: Enter a student name or ID, or check "Process All"
         4. **Optional**: Enter a Missed Class ID to find replacements
         5. **Find Classes**: Click "Find Credit Classes"
-        6. **Export**: Download results or copy message template
+        6. **Select**: Tick the credit classes to include in the message
+        7. **Generate**: Click "Generate Message Template" to create a copyable message
+        8. **Export**: Download full results as a text file
         """)
-    
+
     with st.expander("ℹ️ Rules Applied"):
         st.markdown("""
         - Classes must be in the **same year** as the student
@@ -681,10 +725,7 @@ else:
 # Footer
 st.markdown("""
 <div class="footer">
-    <p>© 2026 Credit Class Finder | Developed by Mohammed Abdelwahed | Version 1.7.2</p>
+    <p>© 2026 Credit Class Finder | Developed by Mohammed Abdelwahed | Version 1.8.0</p>
     <p style="font-size: 0.8rem;">All Rights Reserved</p>
 </div>
 """, unsafe_allow_html=True)
-
-
-
